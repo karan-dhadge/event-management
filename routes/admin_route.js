@@ -2946,6 +2946,4 @@ router.get("/delete_booking/:id", async (req, res) => {
     }
 });
 
-
-
 module.exports = router;

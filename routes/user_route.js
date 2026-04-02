@@ -21,7 +21,6 @@ router.get("/", async function (req, res) {
   var social_links = await exe(sql6);
   var sql7 = "SELECT * FROM contact_info";
   var contact_info = await exe(sql7);
-
   res.render('user/home.ejs', { data, home_slider, home_our_story, choose_us, service, testimonials, social_links, contact_info });
 });
 
@@ -445,7 +444,7 @@ router.post("/save_login", async function (req, res) {
       name: result[0].name,
       email: result[0].email
     };
-    return res.redirect("/?login=success" + social_links + contact_info);
+    return res.redirect("/?login=success");
   } catch (err) {
     console.log(err);
     res.send("Server Error");
@@ -457,7 +456,7 @@ router.get("/forgot-start", async function (req, res) {
   var sql2 = "SELECT * FROM social_links";
   var social_links = await exe(sql2);
   const contact_info = await exe("SELECT * FROM contact_info");
-  res.redirect("/forgot_password" + social_links + contact_info);
+  res.redirect("/forgot_password");
 });
 
 router.get("/forgot_password", async function (req, res) {
@@ -627,65 +626,154 @@ router.get("/profile", async function (req, res) {
   }
 });
 
+// router.post("/profile/update", async function (req, res) {
+//   try {
+//     var sql2 = "SELECT * FROM social_links";
+//     var social_links = await exe(sql2);
+//     const contact_info = await exe("SELECT * FROM contact_info");
+//     if (!req.session.user) {
+//       return res.redirect("/login" + social_links + contact_info);
+//     }
+
+//     var userId = req.session.user.id;
+//     var name = req.body.name;
+//     var mobile = req.body.mobile;
+//     var password = req.body.password;
+//     var oldData = await exe("SELECT profile_photo FROM users WHERE id=?", [userId]);
+//     var oldPhoto = oldData.length > 0 ? oldData[0].profile_photo : null;
+//     var newPhotoName = null;
+//     if (req.files && req.files.profile_photo) {
+//       var photo = req.files.profile_photo;
+//       if (photo.size > 2 * 1024 * 1024) {
+//         return res.send("Image size must be less than 2MB");
+//       }
+//       if (photo.mimetype !== "image/jpeg" && photo.mimetype !== "image/jpg") {
+//         return res.send("Only JPG / JPEG images allowed");
+//       }
+//       if (oldPhoto) {
+//         var oldPath = path.join(__dirname, "../public/upload/profile", oldPhoto);
+//         if (fs.existsSync(oldPath)) {
+//           fs.unlinkSync(oldPath);
+//         }
+//       }
+//       var ext = path.extname(photo.name);
+//       newPhotoName = Date.now() + "_" + Math.floor(Math.random() * 100000) + ext;
+//       var uploadPath = path.join(__dirname, "../public/upload/profile", newPhotoName);
+//       await photo.mv(uploadPath);
+//       req.session.user.profile_photo = newPhotoName;
+//     }
+//     if (newPhotoName && password) {
+//       await exe("UPDATE users SET name=?, mobile=?, password=?, profile_photo=? WHERE id=?", [name, mobile, password, newPhotoName, userId]);
+//     }
+//     else if (newPhotoName) {
+//       await exe("UPDATE users SET name=?, mobile=?, profile_photo=? WHERE id=?", [name, mobile, newPhotoName, userId]);
+//     }
+//     else if (password) {
+//       await exe("UPDATE users SET name=?, mobile=?, password=? WHERE id=?", [name, mobile, password, userId]);
+//     }
+//     else {
+//       await exe(
+//         "UPDATE users SET name=?, mobile=? WHERE id=?", [name, mobile, userId]);
+//     }
+
+//     req.session.user.name = name;
+//     req.session.user.mobile = mobile;
+//     res.redirect("/profile?status=updated");
+//     z
+//   } catch (err) {
+//     console.log(err);
+//     res.status(500).redirect("/profile?status=error");
+//   }
+// });
+
 router.post("/profile/update", async function (req, res) {
   try {
-    var sql2 = "SELECT * FROM social_links";
-    var social_links = await exe(sql2);
-    const contact_info = await exe("SELECT * FROM contact_info");
+    // 🔐 Session check
     if (!req.session.user) {
-      return res.redirect("/login" + social_links + contact_info);
+      return res.redirect("/login");
     }
 
-    var userId = req.session.user.id;
-    var name = req.body.name;
-    var mobile = req.body.mobile;
-    var password = req.body.password;
-    var oldData = await exe("SELECT profile_photo FROM users WHERE id=?", [userId]);
-    var oldPhoto = oldData.length > 0 ? oldData[0].profile_photo : null;
-    var newPhotoName = null;
+    const userId = req.session.user.id;
+    const { name, mobile, password } = req.body;
+
+    // 📸 Get old image
+    const oldData = await exe(
+      "SELECT profile_photo FROM users WHERE id=?",
+      [userId]
+    );
+    const oldPhoto = oldData.length ? oldData[0].profile_photo : null;
+
+    let newPhotoName = oldPhoto;
+
+    // 📷 Image upload handling
     if (req.files && req.files.profile_photo) {
-      var photo = req.files.profile_photo;
+      const photo = req.files.profile_photo;
+
       if (photo.size > 2 * 1024 * 1024) {
         return res.send("Image size must be less than 2MB");
       }
-      if (photo.mimetype !== "image/jpeg" && photo.mimetype !== "image/jpg") {
+
+      if (!["image/jpeg", "image/jpg"].includes(photo.mimetype)) {
         return res.send("Only JPG / JPEG images allowed");
       }
+
+      // ❌ Delete old image
       if (oldPhoto) {
-        var oldPath = path.join(__dirname, "../public/upload/profile", oldPhoto);
+        const oldPath = path.join(
+          __dirname,
+          "../public/upload/profile",
+          oldPhoto
+        );
         if (fs.existsSync(oldPath)) {
           fs.unlinkSync(oldPath);
         }
       }
-      var ext = path.extname(photo.name);
+
+      // ✅ Save new image
+      const ext = path.extname(photo.name);
       newPhotoName = Date.now() + "_" + Math.floor(Math.random() * 100000) + ext;
-      var uploadPath = path.join(__dirname, "../public/upload/profile", newPhotoName);
+      const uploadPath = path.join(
+        __dirname,
+        "../public/upload/profile",
+        newPhotoName
+      );
+
       await photo.mv(uploadPath);
-      req.session.user.profile_photo = newPhotoName;
-    }
-    if (newPhotoName && password) {
-      await exe("UPDATE users SET name=?, mobile=?, password=?, profile_photo=? WHERE id=?", [name, mobile, password, newPhotoName, userId]);
-    }
-    else if (newPhotoName) {
-      await exe("UPDATE users SET name=?, mobile=?, profile_photo=? WHERE id=?", [name, mobile, newPhotoName, userId]);
-    }
-    else if (password) {
-      await exe("UPDATE users SET name=?, mobile=?, password=? WHERE id=?", [name, mobile, password, userId]);
-    }
-    else {
-      await exe(
-        "UPDATE users SET name=?, mobile=? WHERE id=?", [name, mobile, userId]);
     }
 
+    // 🔑 Password hashing (if provided)
+    let hashedPassword = null;
+    if (password && password.trim() !== "") {
+      hashedPassword = await bcrypt.hash(password, 10);
+    }
+
+    // 📝 Update DB
+    if (hashedPassword) {
+      await exe(
+        "UPDATE users SET name=?, mobile=?, password=?, profile_photo=? WHERE id=?",
+        [name, mobile, hashedPassword, newPhotoName, userId]
+      );
+    } else {
+      await exe(
+        "UPDATE users SET name=?, mobile=?, profile_photo=? WHERE id=?",
+        [name, mobile, newPhotoName, userId]
+      );
+    }
+
+    // 🔄 Update session (VERY IMPORTANT)
     req.session.user.name = name;
     req.session.user.mobile = mobile;
+    req.session.user.profile_photo = newPhotoName;
+
+    // ✅ Redirect
     res.redirect("/profile?status=updated");
-    z
+
   } catch (err) {
-    console.log(err);
-    res.status(500).redirect("/profile?status=error");
+    console.error(err);
+    res.redirect("/profile?status=error");
   }
 });
+
 
 router.post("/book_event", async (req, res) => {
   try {
